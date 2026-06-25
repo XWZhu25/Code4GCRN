@@ -14,29 +14,23 @@ Implemented components:
 
 ## Reproducibility assumptions
 
-The paper does not disclose the data split, history/prediction window, hidden
-dimensions, graph threshold, or complete training settings. This project uses
-common traffic-forecasting settings: chronological 60/20/20 splitting and 12
-historical 5-minute steps to predict the next 12 steps. Every assumption is
-editable in `configs/`.
+This project uses common traffic-forecasting settings: chronological 60/20/20 splitting and 12 historical 5-minute steps to predict the next 12 steps.
 
-The current code implements the predictive GCRN network. IWOA is a separate
-hyperparameter-search layer rather than part of the model forward pass. The
-paper does not report enough search bounds to reproduce its exact search.
+The current code implements the predictive GCRN network. IWOA is a separate hyperparameter-search layer rather than part of the model forward pass. The paper does not report enough search bounds to reproduce its exact search.
 
 ## Run
 
 Quick GPU pipeline check:
 
 ```powershell
-C:\Users\Xiaowen Zhu\.conda\envs\trace-rag\python.exe train.py --config configs/pems04.yaml --smoke-test
+train.py --config configs/pems04.yaml --smoke-test
 ```
 
 Full experiments:
 
 ```powershell
-C:\Users\Xiaowen Zhu\.conda\envs\trace-rag\python.exe train.py --config configs/pems04.yaml
-C:\Users\Xiaowen Zhu\.conda\envs\trace-rag\python.exe train.py --config configs/pems08.yaml
+train.py --config configs/pems04.yaml
+train.py --config configs/pems08.yaml
 ```
 
-Checkpoints and metrics are saved under `outputs/<dataset>/`.
+Checkpoints and metrics are saved under `outputs`.

@@ -20,14 +20,15 @@ def seed_everything(seed):
 
 
 @torch.no_grad()
-def evaluate(model, loader, scaler, adjacency, device, max_batches=None):
+def evaluate(model, loader, scaler, adj, device, max_batches=None):
     model.eval()
     predictions, targets = [], []
-    for index, (x, y) in enumerate(loader):
+    for batch_idx, (x, y) in enumerate(loader):
         x, y = x.to(device), y.to(device)
-        predictions.append(scaler.inverse_transform(model(x, adjacency)).cpu())
+        output = scaler.inverse_transform(model(x, adj)).cpu()
+        predictions.append(output)
         targets.append(scaler.inverse_transform(y).cpu())
-        if max_batches is not None and index + 1 >= max_batches:
+        if max_batches is not None and batch_idx + 1 >= max_batches:
             break
     return calculate_metrics(torch.cat(predictions), torch.cat(targets))
 
@@ -49,8 +50,8 @@ def main():
 
     seed_everything(config["seed"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    loaders, scaler, adjacency = load_dataset(config)
-    adjacency = adjacency.to(device)
+    loaders, scaler, adj = load_dataset(config)
+    adj = adj.to(device)
     model = GCRN(
         input_dim=1,
         hidden_dim=config["hidden_dim"],
@@ -68,9 +69,10 @@ def main():
     output_dir = Path("outputs") / config["dataset"]
     output_dir.mkdir(parents=True, exist_ok=True)
     best_path = output_dir / "best.pt"
-    best_val, stale_epochs = float("inf"), 0
-    parameter_count = sum(parameter.numel() for parameter in model.parameters())
-    print(f"device={device} parameters={parameter_count:,}")
+    best_val = float("inf")
+    epochs_without_improvement = 0
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"device={device} parameters={num_params:,}")
 
     for epoch in range(1, config["epochs"] + 1):
         model.train()
@@ -78,7 +80,7 @@ def main():
         for step, (x, y) in enumerate(loaders["train"]):
             x, y = x.to(device), y.to(device)
             optimizer.zero_grad(set_to_none=True)
-            loss = masked_mae(model(x, adjacency), y)
+            loss = masked_mae(model(x, adj), y)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
@@ -90,7 +92,7 @@ def main():
             model,
             loaders["val"],
             scaler,
-            adjacency,
+            adj,
             device,
             max_batches=3 if args.smoke_test else None,
         )
@@ -100,11 +102,12 @@ def main():
             f"val_MAPE={val[2]:.2f}%"
         )
         if val[0] < best_val:
-            best_val, stale_epochs = val[0], 0
+            best_val = val[0]
+            epochs_without_improvement = 0
             torch.save({"model": model.state_dict(), "config": config}, best_path)
         else:
-            stale_epochs += 1
-            if stale_epochs >= config["patience"]:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= config["patience"]:
                 print("early stopping")
                 break
 
@@ -114,7 +117,7 @@ def main():
         model,
         loaders["test"],
         scaler,
-        adjacency,
+        adj,
         device,
         max_batches=3 if args.smoke_test else None,
     )

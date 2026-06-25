@@ -21,26 +21,27 @@ class StandardScaler:
 
 def load_adjacency(csv_path: Path, num_nodes: int) -> torch.Tensor:
     edges = pd.read_csv(csv_path)
-    adjacency = np.zeros((num_nodes, num_nodes), dtype=np.float32)
+    adj = np.zeros((num_nodes, num_nodes), dtype=np.float32)
     sigma = max(float(edges["cost"].std()), 1e-6)
     for src, dst, cost in edges[["from", "to", "cost"]].itertuples(index=False):
         weight = np.exp(-((float(cost) / sigma) ** 2))
-        adjacency[int(src), int(dst)] = weight
-        adjacency[int(dst), int(src)] = weight
+        adj[int(src), int(dst)] = weight
+        adj[int(dst), int(src)] = weight
 
-    adjacency += np.eye(num_nodes, dtype=np.float32)
-    degree = np.maximum(adjacency.sum(axis=1), 1e-6)
-    inverse_sqrt = np.power(degree, -0.5)
-    normalized = inverse_sqrt[:, None] * adjacency * inverse_sqrt[None, :]
-    return torch.from_numpy(normalized)
+    adj += np.eye(num_nodes, dtype=np.float32)
+    degree = np.maximum(adj.sum(axis=1), 1e-6)
+    degree_inv_sqrt = degree ** -0.5
+    adj = degree_inv_sqrt[:, None] * adj * degree_inv_sqrt[None, :]
+    return torch.from_numpy(adj)
 
 
 def make_windows(values, input_steps, output_steps):
     xs, ys = [], []
-    for start in range(len(values) - input_steps - output_steps + 1):
-        middle = start + input_steps
-        xs.append(values[start:middle])
-        ys.append(values[middle:middle + output_steps])
+    window_count = len(values) - input_steps - output_steps + 1
+    for start in range(window_count):
+        split = start + input_steps
+        xs.append(values[start:split])
+        ys.append(values[split:split + output_steps])
     return np.asarray(xs, dtype=np.float32), np.asarray(ys, dtype=np.float32)
 
 
@@ -48,7 +49,7 @@ def load_dataset(config):
     root = Path(config["data_dir"])
     name = config["dataset"]
     raw = np.load(root / f"{name}.npz")["data"].astype(np.float32)
-    # The first channel is traffic flow in the standard PEMS04/08 package.
+    # PEMS stores flow, occupancy and speed in the last dimension.
     flow = raw[..., :1]
     length = len(flow)
     train_end = int(length * config["train_ratio"])
@@ -74,5 +75,5 @@ def load_dataset(config):
             shuffle=split == "train",
             pin_memory=torch.cuda.is_available(),
         )
-    adjacency = load_adjacency(root / f"{name}.csv", flow.shape[1])
-    return loaders, scaler, adjacency
+    adj = load_adjacency(root / f"{name}.csv", flow.shape[1])
+    return loaders, scaler, adj
