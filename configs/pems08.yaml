@@ -1,0 +1,16 @@
+dataset: PEMS08
+data_dir: Datasets/PEMS08
+input_steps: 12
+output_steps: 12
+train_ratio: 0.6
+val_ratio: 0.2
+batch_size: 32
+hidden_dim: 64
+num_layers: 2
+cheb_order: 2
+dropout: 0.1
+learning_rate: 0.001
+weight_decay: 0.0001
+epochs: 100
+patience: 15
+seed: 42
